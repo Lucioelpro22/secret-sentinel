@@ -1,0 +1,52 @@
+name: Supply-chain
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and inspect package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install isolated build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pip-audit twine
+      - name: Build sdist and wheel
+        run: python -m build --sdist --wheel
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+      - name: Audit built environment
+        run: python -m pip_audit --strict --desc
+      - name: Record artifact hashes and dependency inventory
+        run: |
+          sha256sum dist/* > dist/SHA256SUMS
+          python -m pip inspect --local > dist/pip-inspect.json
+      - name: Upload package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-sentinel-package-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
