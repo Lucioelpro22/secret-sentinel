@@ -93,7 +93,7 @@ class ScanReport:
             "files_scanned": self.files_scanned,
             "bytes_scanned": self.bytes_scanned,
             "files_skipped": self.files_skipped,
-            "secret_count": self.secret_count,
+            "secret_count": len(self.findings),
             "findings": [finding.to_dict() for finding in self.findings],
             "warnings": list(self.warnings),
         }
