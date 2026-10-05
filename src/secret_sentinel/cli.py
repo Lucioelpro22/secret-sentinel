@@ -38,6 +38,7 @@ def _render(report: object, output_format: str) -> str:
             "# Secret Sentinel report\n",
             f"- Files scanned: {data['files_scanned']}",
             f"- Findings: {data['secret_count']}",
+            f"- Scan complete: {data['complete']}",
             "",
             "| Path | Line | Rule | Severity | Evidence |",
             "|---|---:|---|---|---|",
@@ -46,14 +47,17 @@ def _render(report: object, output_format: str) -> str:
             lines.append(
                 f"| `{finding['path']}` | {finding['line']} | `{finding['rule_id']}` | {finding['severity']} | `{finding['redacted_match']}` |"
             )
+        lines.extend(f"\nWarning: {warning}" for warning in data["warnings"])
         return "\n".join(lines) + "\n"
     lines = [
-        f"Scanned {data['files_scanned']} files; {data['secret_count']} finding(s)."
+        f"Scanned {data['files_scanned']} files; {data['secret_count']} finding(s).",
+        f"Scan complete: {data['complete']}.",
     ]
     lines.extend(
         f"{f['path']}:{f['line']}:{f['column']} {f['severity']} {f['rule_id']} {f['redacted_match']}"
         for f in data["findings"]
     )
+    lines.extend(f"Warning: {warning}" for warning in data["warnings"])
     return "\n".join(lines) + "\n"
 
 
@@ -67,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(rendered)
     rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}
     threshold = rank[args.fail_on]
+    if not report.complete:
+        return 2
     return 1 if any(rank[f.severity] >= threshold for f in report.findings) else 0
 
 

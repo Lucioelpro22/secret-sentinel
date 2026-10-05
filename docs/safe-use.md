@@ -12,14 +12,16 @@
 
 Use a pinned version, a read-only checkout, minimal token permissions, and an explicit failure threshold. Do not pass provider credentials to the scanner. Upload only the redacted report, and set an appropriate retention period.
 
-Example integration wrapper (until the CLI milestone is released):
+Example CLI integration:
 
 ```yaml
 - name: Scan for exposed secrets
-  run: python scripts/run_secret_sentinel.py
+  run: secret-sentinel scan . --format json --output secret-report.json --fail-on high
 ```
 
 Do not print the report with `cat` into logs. Review it as an artifact with access controls.
+
+Exit `2` means the scan was incomplete, even when no finding met the threshold. Inspect `complete` and `warnings` in the report, correct missing paths or permissions, and review the configured resource limits before rerunning. API wrappers must fail when `report.complete` is false. Intentional scope exclusions and binary/empty-file skips are not input failures.
 
 ## When a finding appears
 
