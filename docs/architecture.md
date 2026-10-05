@@ -29,6 +29,8 @@ The normalizer deduplicates overlapping matches and produces a stable finding sc
 
 Policy maps findings to an exit status. It is fail-closed for invalid policy, unsupported versions, and unsafe overrides. Suppressions should be narrow, documented, and reviewable.
 
+`ScanReport.complete` records whether selected input was fully processed. Read/traversal failures and resource truncation set it to false and append a safe warning. CLI policy gives incomplete input exit `2` before considering finding severity. Each file has its own finding budget, so truncating one file cannot consume another file's budget.
+
 ### Reporters
 
 JSON is for automation; Markdown is for human review. Both use the same redacted finding model so they cannot diverge on secret handling.

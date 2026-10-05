@@ -36,7 +36,14 @@ report = Scanner(ScanConfig()).scan(".")
 print(json.dumps(report.to_dict(), indent=2))
 ```
 
-The CLI/reporting wrapper is planned for the next integration milestone. Until then, a CI wrapper should fail the job when `report.findings` reaches the team's reviewed severity threshold. Pin the package revision in CI.
+Install the package and run the CLI against an explicit file or directory:
+
+```bash
+python -m pip install .
+secret-sentinel scan . --format json --output secret-report.json --fail-on high
+```
+
+Pin the package revision in CI. API integrations must check `report.complete` as well as findings; an incomplete scan cannot establish a clean result.
 
 ## Safe operating model
 
@@ -51,7 +58,15 @@ Do not paste raw findings into tickets, chat, issue comments, or logs. The scann
 
 ## CI contract
 
-The stable baseline contract is the redacted `ScanReport.to_dict()` schema. A future CLI will map findings to CI exit codes; do not depend on undocumented command names or flags while the project is pre-1.0.
+The redacted `ScanReport.to_dict()` schema includes an additive `complete` boolean and `warnings`. Text and Markdown reports also show scan completeness and warnings.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | All selected input was scanned; no finding met `--fail-on` |
+| `1` | Complete scan with a finding at or above `--fail-on` |
+| `2` | Missing/unreadable target, unreadable selected input, or resource truncation; findings may still be present |
+
+Incomplete scans take precedence over the severity threshold. File/total-byte limits, line-length truncation, and omitted text after a per-file finding cap produce an incomplete report. Finding caps apply independently to each file; reaching a cap in one file never stops scanning other files. Explicit exclusions, hidden files excluded by policy, binary files, and empty files do not make a scan incomplete. Completeness describes coverage of the configured scope, not proof that every possible secret format was detected.
 
 ## Development
 

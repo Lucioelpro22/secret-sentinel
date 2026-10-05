@@ -73,6 +73,13 @@ class ScanReport:
     bytes_scanned: int = 0
     files_skipped: int = 0
     warnings: list[str] = field(default_factory=list)
+    complete: bool = True
+
+    def mark_incomplete(self, warning: str) -> None:
+        """Record omitted in-scope input without exposing exception contents."""
+        self.complete = False
+        if warning not in self.warnings:
+            self.warnings.append(warning)
 
     @property
     def secret_count(self) -> int:
@@ -81,11 +88,12 @@ class ScanReport:
     def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": "1",
+            "complete": self.complete,
             "root": self.root,
             "files_scanned": self.files_scanned,
             "bytes_scanned": self.bytes_scanned,
             "files_skipped": self.files_skipped,
-            "secret_count": self.secret_count,
+            "secret_count": len(self.findings),
             "findings": [finding.to_dict() for finding in self.findings],
             "warnings": list(self.warnings),
         }

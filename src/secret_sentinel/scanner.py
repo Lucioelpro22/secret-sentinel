@@ -17,27 +17,39 @@ class Scanner:
         self.config = config or ScanConfig()
 
     def scan(self, target: str | os.PathLike[str]) -> ScanReport:
-        root = Path(target).resolve()
+        root = Path(target)
+        try:
+            root = root.resolve()
+        except (OSError, RuntimeError):
+            report = ScanReport(root=str(root))
+            report.mark_incomplete("target cannot be resolved")
+            return report
         report = ScanReport(root=str(root))
         paths = [root] if root.is_file() else self._iter_files(root, report)
         total = 0
         for path in paths:
             if total >= self.config.max_total_bytes:
-                report.warnings.append(
+                report.mark_incomplete(
                     "scan byte limit reached; remaining files skipped"
                 )
                 break
             try:
                 size = path.stat().st_size
-                if size > self.config.max_file_bytes or size == 0:
+                if size == 0:
                     report.files_skipped += 1
+                    continue
+                if size > self.config.max_file_bytes:
+                    report.files_skipped += 1
+                    report.mark_incomplete("file byte limit exceeded; file skipped")
                     continue
                 if total + size > self.config.max_total_bytes:
                     report.files_skipped += 1
+                    report.mark_incomplete("scan byte limit exceeded; file skipped")
                     continue
                 raw = path.read_bytes()
             except (OSError, ValueError):
                 report.files_skipped += 1
+                report.mark_incomplete("file could not be read; file skipped")
                 continue
             if b"\x00" in raw:
                 report.files_skipped += 1
@@ -51,11 +63,15 @@ class Scanner:
 
     def _iter_files(self, root: Path, report: ScanReport) -> list[Path]:
         if not root.exists() or not root.is_dir():
-            report.warnings.append("target is not a readable directory")
+            report.mark_incomplete("target is not a readable file or directory")
             return []
         result: list[Path] = []
+
+        def on_walk_error(error: OSError) -> None:
+            report.mark_incomplete("directory could not be read; subtree skipped")
+
         for current, dirs, files in os.walk(
-            root, followlinks=self.config.follow_symlinks
+            root, followlinks=self.config.follow_symlinks, onerror=on_walk_error
         ):
             dirs.sort()
             files.sort()
@@ -86,6 +102,11 @@ class Scanner:
     def _scan_text(self, text: str, display_path: str, report: ScanReport) -> None:
         seen: set[tuple[int, str]] = set()
         for line_number, original in enumerate(text.splitlines(), 1):
+            if len(seen) >= self.config.max_findings_per_file:
+                report.mark_incomplete("per-file finding limit reached; text skipped")
+                return
+            if len(original) > self.config.max_line_length:
+                report.mark_incomplete("line length limit exceeded; text truncated")
             line = original[: self.config.max_line_length]
             for rule in RULES:
                 for match in rule.pattern.finditer(line):
@@ -116,8 +137,6 @@ class Scanner:
                     value,
                     "medium",
                 )
-            if len(report.findings) >= self.config.max_findings_per_file:
-                return
 
     @staticmethod
     def _looks_secret(value: str) -> bool:
@@ -156,11 +175,10 @@ class Scanner:
         confidence: Literal["high", "medium"],
     ) -> None:
         key = (line, rule_id)
-        if (
-            key in seen
-            or len([f for f in report.findings if f.path == path])
-            >= self.config.max_findings_per_file
-        ):
+        if key in seen:
+            return
+        if len(seen) >= self.config.max_findings_per_file:
+            report.mark_incomplete("per-file finding limit reached; text skipped")
             return
         seen.add(key)
         report.findings.append(
