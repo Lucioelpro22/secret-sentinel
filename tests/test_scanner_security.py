@@ -102,3 +102,74 @@ def test_does_not_follow_symlink_by_default(tmp_path) -> None:
     report = Scanner().scan(root)
     assert report.secret_count == 0
     assert all(finding.path != "../outside/secret.env" for finding in report.findings)
+
+
+def test_binary_input_counts_towards_total_budget(tmp_path) -> None:
+    (tmp_path / "a.bin").write_bytes(b"\x00" * 4)
+    (tmp_path / "b.txt").write_text("AKIA1234567890ABCDEF")
+    report = Scanner(ScanConfig(max_total_bytes=4)).scan(tmp_path)
+    assert report.bytes_scanned == 4
+    assert report.files_skipped == 1
+    assert not report.complete
+    assert not report.findings
+
+
+def test_fifo_is_incomplete_without_blocking(tmp_path) -> None:
+    import os
+
+    os.mkfifo(tmp_path / "pipe")
+    report = Scanner().scan(tmp_path)
+    assert not report.complete
+    assert report.files_skipped == 1
+
+
+def test_unsupported_reads_fail_closed_even_for_empty_root(
+    tmp_path, monkeypatch
+) -> None:
+    import os
+
+    monkeypatch.setattr(os, "supports_dir_fd", set())
+    report = Scanner().scan(tmp_path)
+    assert not report.complete
+    assert report.files_scanned == 0
+
+
+def test_follow_symlinks_configuration_is_rejected() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        Scanner(ScanConfig(follow_symlinks=True))
+
+
+def test_explicit_target_symlink_selects_canonical_file(tmp_path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("AKIA1234567890ABCDEF")
+    link = tmp_path / "selected"
+    link.symlink_to(target)
+    report = Scanner().scan(link)
+    assert report.complete
+    assert report.root == str(target)
+    assert report.secret_count == 1
+
+
+def test_file_replacement_with_symlink_is_rejected(tmp_path, monkeypatch) -> None:
+    from secret_sentinel import scanner
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("AKIA1234567890ABCDEF")
+    root = tmp_path / "root"
+    root.mkdir()
+    target = root / "safe.txt"
+    target.write_text("safe")
+    read_file = scanner.read_scan_file
+
+    def replace_and_read(descriptor, relative, limit):
+        target.unlink()
+        target.symlink_to(outside)
+        return read_file(descriptor, relative, limit)
+
+    monkeypatch.setattr(scanner, "read_scan_file", replace_and_read)
+    report = Scanner().scan(root)
+    assert not report.complete
+    assert report.files_skipped == 1
+    assert not report.findings

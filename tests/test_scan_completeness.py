@@ -63,10 +63,10 @@ def test_unreadable_file_reports_failure_without_exception_content(
     target = tmp_path / "config.txt"
     target.write_text("harmless", encoding="utf-8")
 
-    def denied(self):
+    def denied(*args, **kwargs):
         raise PermissionError(TOKEN)
 
-    monkeypatch.setattr(Path, "read_bytes", denied)
+    monkeypatch.setattr("secret_sentinel.scanner.read_scan_file", denied)
     report = Scanner().scan(target)
     assert not report.complete
     assert report.files_skipped == 1

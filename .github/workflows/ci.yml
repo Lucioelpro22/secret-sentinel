@@ -43,6 +43,8 @@ jobs:
         run: python -m mypy src
       - name: Tests with coverage
         run: python -m pytest --cov --cov-report=term-missing --cov-report=xml
+      - name: Scan production source with the installed CLI
+        run: secret-sentinel scan src --include-hidden --format json --output "$RUNNER_TEMP/secret-sentinel-source-report.json" --fail-on high
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -77,4 +79,3 @@ jobs:
         run: |
           test "${{ needs.quality.result }}" = success
           test "${{ needs.dependency-audit.result }}" = success
-

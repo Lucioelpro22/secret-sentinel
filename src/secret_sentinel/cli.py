@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from .models import ScanConfig, ScanReport
 from .scanner import Scanner
+
+
+def _markdown_cell(value: str) -> str:
+    return "".join(
+        f"&#{ord(char)};" if char in "&<>|`\\*_[]()!" else char for char in value
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -26,6 +33,20 @@ def _parser() -> argparse.ArgumentParser:
         "--fail-on", choices=("low", "medium", "high", "critical"), default="high"
     )
     scan.add_argument("--include-hidden", action="store_true")
+    scan.add_argument(
+        "--exclude-dir",
+        action="append",
+        default=[],
+        help="exclude a directory name (repeatable; adds to defaults)",
+    )
+    scan.add_argument(
+        "--exclude-extension",
+        action="append",
+        default=[],
+        help="exclude a suffix such as .log (repeatable; adds to defaults)",
+    )
+    scan.add_argument("--max-file-bytes", type=int, default=2_000_000)
+    scan.add_argument("--max-total-bytes", type=int, default=50_000_000)
     return parser
 
 
@@ -45,7 +66,7 @@ def _render(report: ScanReport, output_format: str) -> str:
         ]
         for finding in report.findings:
             lines.append(
-                f"| `{finding.path}` | {finding.line} | `{finding.rule_id}` | {finding.severity} | `{finding.redacted_match}` |"
+                f"| {_markdown_cell(finding.path)} | {finding.line} | `{finding.rule_id}` | {finding.severity} | `{_markdown_cell(finding.redacted_match)}` |"
             )
         lines.extend(f"\nWarning: {warning}" for warning in report.warnings)
         return "\n".join(lines) + "\n"
@@ -62,11 +83,35 @@ def _render(report: ScanReport, output_format: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    report = Scanner(ScanConfig(include_hidden=args.include_hidden)).scan(args.target)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    defaults = ScanConfig()
+    try:
+        config = ScanConfig(
+            include_hidden=args.include_hidden,
+            excluded_dirs=defaults.excluded_dirs | frozenset(args.exclude_dir),
+            excluded_extensions=defaults.excluded_extensions
+            | frozenset(args.exclude_extension),
+            max_file_bytes=args.max_file_bytes,
+            max_total_bytes=args.max_total_bytes,
+        )
+    except ValueError:
+        parser.exit(
+            2,
+            "Invalid scan configuration; use positive byte limits, directory names and dotted extensions.\n",
+        )
+    report = Scanner(config).scan(args.target)
     rendered = _render(report, args.format)
     if args.output:
-        args.output.write_text(rendered, encoding="utf-8", newline="\n")
+        try:
+            descriptor = os.open(
+                args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+            )
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
+                output.write(rendered)
+        except OSError:
+            sys.stderr.write("Report could not be written.\n")
+            return 2
     else:
         sys.stdout.write(rendered)
     rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}

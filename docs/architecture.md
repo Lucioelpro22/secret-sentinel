@@ -19,7 +19,7 @@ The collector accepts an explicit root and applies include/exclude rules, file-s
 
 ### Detector registry
 
-Detectors are small, deterministic functions. Each detector returns a detector ID, category, match location, confidence, severity, and a safe remediation hint. Detector implementations receive bounded text and must not emit the matched value.
+Detectors are small, deterministic functions. Each finding carries a detector ID, match location, confidence, severity, description and redacted evidence. Detector implementations receive bounded text and must not emit the matched value.
 
 ### Normalizer and redactor
 
@@ -27,7 +27,7 @@ The normalizer deduplicates overlapping matches and produces a stable finding sc
 
 ### Policy gate
 
-Policy maps findings to an exit status. It is fail-closed for invalid policy, unsupported versions, and unsafe overrides. Suppressions should be narrow, documented, and reviewable.
+The current gate maps findings to an exit status and validates scan limits and exclusions. Policy-file loading and suppressions are planned, not implemented.
 
 `ScanReport.complete` records whether selected input was fully processed. Read/traversal failures and resource truncation set it to false and append a safe warning. CLI policy gives incomplete input exit `2` before considering finding severity. Each file has its own finding budget, so truncating one file cannot consume another file's budget.
 
@@ -45,4 +45,4 @@ The repository being scanned is untrusted input. File names, encodings, symlinks
 - no provider validation or credential use;
 - no repository mutation;
 - deterministic findings for identical input, policy, and version;
-- raw secrets are never included in reports or telemetry.
+- matched secret values are redacted before reporting; recognized credential patterns in paths are sanitized, while other metadata remains sensitive.

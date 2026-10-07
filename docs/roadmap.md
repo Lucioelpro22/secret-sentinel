@@ -6,14 +6,17 @@ The roadmap is directional; security and correctness take priority over feature 
 
 - deterministic local scan;
 - redacted JSON and Markdown reports;
-- explicit scope and policy configuration;
-- common token, private-key, password, and unsafe-configuration detectors;
-- unit tests for positive, negative, redaction, traversal, and malformed-policy cases;
+- explicit scope and ScanConfig/CLI configuration;
+- common token, private-key and quoted credential assignment detectors;
+- unit tests for positive, negative, redaction, traversal and invalid-configuration cases;
 - CI quality gates and dependency auditing.
 
 ## v0.2 — engineering hardening
 
-- detector corpus with synthetic fixtures;
+- [x] detector corpus with synthetic fixtures;
+- [x] pinned bounded file reads, metadata protection and CLI scope controls;
+- [ ] policy files and narrow reviewed suppressions;
+- [ ] unsafe-configuration detectors;
 - archive and generated-file handling with strict resource limits;
 - SARIF output without secret material;
 - documented suppression lifecycle;
