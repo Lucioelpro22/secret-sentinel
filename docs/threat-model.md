@@ -24,7 +24,7 @@
 | Denial of service from huge/binary input | File-size limits, bounded reads, binary detection | A very large number of files can still consume CI time |
 | Detector bypass | Multiple detector families, entropy/context checks, regression corpus | Unknown formats, split values, and encrypted values may be missed |
 | Unsafe remediation | Read-only architecture and no provider credentials | Operators may take unsafe manual actions after a finding |
-| Policy bypass | Strict ScanConfig and CLI validation; policy files and suppressions are planned | A user can intentionally configure a permissive policy |
+| Policy bypass | Bounded strict JSON policies; exact fingerprint/path/rule matching; reasons, expiration and visible suppressed evidence | A user can intentionally configure a permissive policy |
 | Dependency compromise | Pinned/controlled CI dependencies, audit and tests | Upstream compromise cannot be eliminated by the scanner |
 | Report leakage | Redacted output and guidance to protect artifacts | Paths and metadata can still reveal sensitive project context |
 

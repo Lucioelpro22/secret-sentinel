@@ -15,7 +15,7 @@ The roadmap is directional; security and correctness take priority over feature 
 
 - [x] detector corpus with synthetic fixtures;
 - [x] pinned bounded file reads, metadata protection and CLI scope controls;
-- [ ] policy files and narrow reviewed suppressions;
+- [x] versioned JSON policy files and narrow reviewed, expiring suppressions;
 - [ ] unsafe-configuration detectors;
 - archive and generated-file handling with strict resource limits;
 - SARIF output without secret material;
