@@ -1,6 +1,6 @@
 # Policy files and reviewed suppressions
 
-Select a JSON policy explicitly with `secret-sentinel scan ROOT --policy FILE`. There is no automatic policy discovery. The historical YAML example is not loaded. Policies must be UTF-8 regular files at most 64 KiB, The selected parent path is canonicalized once, then pinned with no-follow component opens; a symlink at the policy file itself is rejected. POSIX safe-read support is required.
+Select a JSON policy explicitly with `secret-sentinel scan ROOT --policy FILE`. There is no automatic policy discovery. The historical YAML example is not loaded. Policies must be UTF-8 regular files at most 64 KiB. The selected parent path is canonicalized once, then pinned with no-follow component opens; a symlink at the policy file itself is rejected. POSIX safe-read support is required.
 
 ## Schema version 1
 
