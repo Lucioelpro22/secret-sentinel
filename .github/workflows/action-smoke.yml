@@ -31,9 +31,10 @@ jobs:
           (base / 'finding' / 'synthetic.txt').write_text('AWS=AKIA1234567890ABCDEF\n')
           (base / 'incomplete' / 'large.txt').write_bytes(b'x' * 2_000_001)
           PY
+      # Bind the action implementation to this workflow commit, not mutable checkout files.
       - name: Scan clean fixture
         id: clean
-        uses: ./
+        uses: $/
         with:
           path: .action-smoke-fixture/clean
           artifact-name: action-smoke-clean
@@ -41,7 +42,7 @@ jobs:
       - name: Scan finding fixture and upload before gating
         id: finding
         continue-on-error: true
-        uses: ./
+        uses: $/
         with:
           path: .action-smoke-fixture/finding
           artifact-name: action-smoke-finding
@@ -49,7 +50,7 @@ jobs:
       - name: Scan incomplete fixture and upload before gating
         id: incomplete
         continue-on-error: true
-        uses: ./
+        uses: $/
         with:
           path: .action-smoke-fixture/incomplete
           artifact-name: action-smoke-incomplete
