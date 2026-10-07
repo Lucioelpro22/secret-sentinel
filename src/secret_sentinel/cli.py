@@ -6,9 +6,11 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from .models import ScanConfig, ScanReport
+from .policy import PolicyError, apply_policy, load_policy
 from .scanner import Scanner
 
 
@@ -30,9 +32,12 @@ def _parser() -> argparse.ArgumentParser:
         "--output", type=Path, help="write the redacted report to this path"
     )
     scan.add_argument(
-        "--fail-on", choices=("low", "medium", "high", "critical"), default="high"
+        "--fail-on", choices=("low", "medium", "high", "critical"), default=None
     )
-    scan.add_argument("--include-hidden", action="store_true")
+    scan.add_argument(
+        "--policy", type=Path, help="load an explicit versioned JSON policy"
+    )
+    scan.add_argument("--include-hidden", action="store_true", default=None)
     scan.add_argument(
         "--exclude-dir",
         action="append",
@@ -45,8 +50,8 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         help="exclude a suffix such as .log (repeatable; adds to defaults)",
     )
-    scan.add_argument("--max-file-bytes", type=int, default=2_000_000)
-    scan.add_argument("--max-total-bytes", type=int, default=50_000_000)
+    scan.add_argument("--max-file-bytes", type=int, default=None)
+    scan.add_argument("--max-total-bytes", type=int, default=None)
     return parser
 
 
@@ -59,6 +64,7 @@ def _render(report: ScanReport, output_format: str) -> str:
             "# Secret Sentinel report\n",
             f"- Files scanned: {report.files_scanned}",
             f"- Findings: {finding_count}",
+            f"- Suppressed findings: {len(report.suppressed_findings)}",
             f"- Scan complete: {report.complete}",
             "",
             "| Path | Line | Rule | Severity | Evidence |",
@@ -68,15 +74,35 @@ def _render(report: ScanReport, output_format: str) -> str:
             lines.append(
                 f"| {_markdown_cell(finding.path)} | {finding.line} | `{finding.rule_id}` | {finding.severity} | `{_markdown_cell(finding.redacted_match)}` |"
             )
+        if report.suppressed_findings:
+            lines.extend(
+                [
+                    "",
+                    "## Reviewed suppressions",
+                    "",
+                    "| Path | Line | Rule | Evidence | Reason | Expires (UTC) |",
+                    "|---|---:|---|---|---|---|",
+                ]
+            )
+            for item in report.suppressed_findings:
+                finding = item.finding
+                lines.append(
+                    f"| {_markdown_cell(finding.path)} | {finding.line} | `{finding.rule_id}` | {_markdown_cell(finding.redacted_match)} | {_markdown_cell(item.reason)} | {item.expires} |"
+                )
         lines.extend(f"\nWarning: {warning}" for warning in report.warnings)
         return "\n".join(lines) + "\n"
     lines = [
         f"Scanned {report.files_scanned} files; {finding_count} finding(s).",
         f"Scan complete: {report.complete}.",
+        f"Suppressed findings: {len(report.suppressed_findings)}.",
     ]
     lines.extend(
         f"{f.path}:{f.line}:{f.column} {f.severity} {f.rule_id} {f.redacted_match}"
         for f in report.findings
+    )
+    lines.extend(
+        f"Suppressed: {item.finding.path}:{item.finding.line} {item.finding.rule_id} {item.finding.redacted_match}; reason={item.reason}; expires={item.expires} (UTC)"
+        for item in report.suppressed_findings
     )
     lines.extend(f"Warning: {warning}" for warning in report.warnings)
     return "\n".join(lines) + "\n"
@@ -85,22 +111,38 @@ def _render(report: ScanReport, output_format: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    defaults = ScanConfig()
     try:
-        config = ScanConfig(
-            include_hidden=args.include_hidden,
+        policy = load_policy(args.policy) if args.policy else None
+        defaults = policy.config if policy else ScanConfig()
+        config = replace(
+            defaults,
+            include_hidden=defaults.include_hidden
+            if args.include_hidden is None
+            else args.include_hidden,
             excluded_dirs=defaults.excluded_dirs | frozenset(args.exclude_dir),
             excluded_extensions=defaults.excluded_extensions
             | frozenset(args.exclude_extension),
-            max_file_bytes=args.max_file_bytes,
-            max_total_bytes=args.max_total_bytes,
+            max_file_bytes=defaults.max_file_bytes
+            if args.max_file_bytes is None
+            else args.max_file_bytes,
+            max_total_bytes=defaults.max_total_bytes
+            if args.max_total_bytes is None
+            else args.max_total_bytes,
         )
+    except PolicyError:
+        parser.exit(2, "Policy could not be loaded or validated.\n")
     except ValueError:
         parser.exit(
             2,
             "Invalid scan configuration; use positive byte limits, directory names and dotted extensions.\n",
         )
+    fail_on = args.fail_on or (policy.fail_on if policy else "high")
     report = Scanner(config).scan(args.target)
+    if policy:
+        try:
+            apply_policy(report, policy)
+        except PolicyError:
+            parser.exit(2, "Policy could not be loaded or validated.\n")
     rendered = _render(report, args.format)
     if args.output:
         try:
@@ -115,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         sys.stdout.write(rendered)
     rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-    threshold = rank[args.fail_on]
+    threshold = rank[fail_on]
     if not report.complete:
         return 2
     return 1 if any(rank[f.severity] >= threshold for f in report.findings) else 0

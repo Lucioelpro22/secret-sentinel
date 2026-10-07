@@ -34,10 +34,12 @@ Exit `2` means the scan was incomplete, even when no finding met the threshold. 
 
 Secret Sentinel does not perform steps 3 or 4 automatically by design.
 
-## Planned suppressions
+## Reviewed suppressions
 
-Executable suppressions are not implemented yet. Prefer removing the false positive. If suppression is necessary, scope it to a detector and exact file or line, record the reason and expiry, and require code-owner review. Never suppress a broad pattern merely to make CI green.
+Use an explicitly selected JSON policy as described in [policy.md](policy.md). Prefer removing the false positive. If suppression is necessary, scope it to a detector and exact file or line, record the reason and expiry, and require code-owner review. Never suppress a broad pattern merely to make CI green.
 
 ## Limitations
 
 No scanner catches every secret. Review generated files, Git history, build logs, package manifests, infrastructure configuration, and external systems according to your organization's incident-response policy.
+
+Suppression matches require the detector, exact relative path and finding fingerprint, with an optional exact line. The mandatory reason and expiration remain visible in reports. Expired entries invalidate the entire policy; remove or review them before rerunning. A policy change should receive code-owner review because CLI overrides and exclusions can intentionally change scope.

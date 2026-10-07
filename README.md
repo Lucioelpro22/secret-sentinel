@@ -95,6 +95,14 @@ Safe reads require POSIX directory descriptors and no-follow support; use WSL on
 
 `bytes_scanned` counts bytes consumed, including skipped binary input and bounded overflow probes, capped at the total budget; overflow may read one additional sentinel byte. Binary files remain excluded from detector analysis. Reports hide recognized credential patterns and escape control characters in paths; paths can still contain sensitive or unrecognized values.
 
-The example YAML is a future policy design, not an executable configuration. Policy-file loading, suppressions, unsafe-configuration detectors, archive contents, and Git history scanning are not implemented.
+Versioned JSON policies and exact expiring suppressions are supported through an explicit `--policy` option; see [docs/policy.md](docs/policy.md). YAML loading, unsafe-configuration detectors, archive contents, and Git history scanning are not implemented.
 
 Report output uses exclusive creation with owner-only permissions. An existing output file or symlink is rejected (exit 2) to prevent source-file overwrite; choose a new report path on each run. Markdown path metadata is rendered as literal text.
+
+## Reviewed policy
+
+```bash
+secret-sentinel scan . --policy .secret-sentinel.example.json --format json --output new-secret-report.json
+```
+
+Policies are validated before scanning and are never discovered automatically. Unknown keys, duplicate JSON keys, invalid values and expired suppressions fail with exit 2. Suppressed findings remain visible under `suppressed_findings` and `suppressed_count`; `findings` and `secret_count` represent active findings. Incomplete coverage always retains exit 2.

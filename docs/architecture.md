@@ -27,7 +27,7 @@ The normalizer deduplicates overlapping matches and produces a stable finding sc
 
 ### Policy gate
 
-The current gate maps findings to an exit status and validates scan limits and exclusions. Policy-file loading and suppressions are planned, not implemented.
+The gate validates explicitly selected versioned JSON policy files using bounded no-follow reads. It applies exact, reviewed, expiring suppressions and maps remaining findings to an exit status. Suppressed evidence stays visible in the report and cannot change incomplete coverage to complete.
 
 `ScanReport.complete` records whether selected input was fully processed. Read/traversal failures and resource truncation set it to false and append a safe warning. CLI policy gives incomplete input exit `2` before considering finding severity. Each file has its own finding budget, so truncating one file cannot consume another file's budget.
 

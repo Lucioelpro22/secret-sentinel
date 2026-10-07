@@ -105,6 +105,23 @@ class Finding:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class SuppressedFinding:
+    finding: Finding
+    reason: str
+    expires: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reason", sanitize_metadata(self.reason))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "finding": self.finding.to_dict(),
+            "reason": self.reason,
+            "expires": self.expires,
+        }
+
+
 @dataclass(slots=True)
 class ScanReport:
     root: str
@@ -114,6 +131,7 @@ class ScanReport:
     files_skipped: int = 0
     warnings: list[str] = field(default_factory=list)
     complete: bool = True
+    suppressed_findings: list[SuppressedFinding] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.root = sanitize_metadata(self.root)
@@ -137,6 +155,10 @@ class ScanReport:
             "bytes_scanned": self.bytes_scanned,
             "files_skipped": self.files_skipped,
             "secret_count": len(self.findings),
+            "suppressed_count": len(self.suppressed_findings),
+            "suppressed_findings": [
+                item.to_dict() for item in self.suppressed_findings
+            ],
             "findings": [finding.to_dict() for finding in self.findings],
             "warnings": list(self.warnings),
         }
