@@ -34,7 +34,7 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          for workflow in ci.yml codeql.yml supply-chain.yml; do
+          for workflow in ci.yml codeql.yml supply-chain.yml action-smoke.yml zizmor.yml; do
             count="$(gh run list --workflow "$workflow" --commit "$RELEASE_SHA" --limit 50 --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
             if [[ "$count" -lt 1 ]]; then
               echo "No successful $workflow run found for $RELEASE_SHA" >&2

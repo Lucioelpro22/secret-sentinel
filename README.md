@@ -1,6 +1,6 @@
 # Secret Sentinel
 
-Secret Sentinel is a defensive, local-first scanner for detecting accidentally committed credentials in source trees and CI artifacts.
+Secret Sentinel is a defensive, local-first scanner for detecting accidentally committed credentials in source trees and CI artifacts. Its optional GitHub Action runs bounded checks on pull requests and uploads privacy-reduced reports; see [GitHub Action usage](docs/github-action.md).
 
 It is designed for engineers and security teams that need a repeatable pre-commit or CI control without sending source code to a third party. Findings are normalized, classified, and redacted before they are rendered in reports.
 
@@ -19,7 +19,7 @@ It is designed for engineers and security teams that need a repeatable pre-commi
 ## What it does not do
 
 - It does not validate credentials against a service.
-- It does not transmit source code, findings, or secret values to an external API.
+- The scanner does not transmit source code, findings, or secret values to an external API. The optional GitHub Action uploads privacy-reduced JSON/Markdown reports to GitHub Actions artifacts.
 - It does not rotate, revoke, delete, or rewrite credentials.
 - It does not push commits, open pull requests, or alter repository settings.
 - It does not guarantee the absence of secrets; encoded, split, encrypted, or novel formats may evade detection.

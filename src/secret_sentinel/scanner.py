@@ -21,10 +21,17 @@ class Scanner:
         if self.config.follow_symlinks:
             raise ValueError("following symlinks is not supported by safe scans")
 
-    def scan(self, target: str | os.PathLike[str]) -> ScanReport:
+    def scan(
+        self, target: str | os.PathLike[str], *, resolve_target: bool = True
+    ) -> ScanReport:
+        """Scan selected input; callers may preserve a previously confined root.
+
+        Disabling initial resolution rejects symlink roots through the existing
+        descriptor-relative no-follow reader instead of following a replaced root.
+        """
         root = Path(target)
         try:
-            root = root.resolve()
+            root = root.resolve() if resolve_target else root.absolute()
         except (OSError, RuntimeError):
             report = ScanReport(root=str(root))
             report.mark_incomplete("target cannot be resolved")

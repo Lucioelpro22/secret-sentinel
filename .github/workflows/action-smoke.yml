@@ -1,0 +1,100 @@
+name: Action smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create synthetic fixtures
+        shell: bash
+        run: |
+          python3 -I - <<'PY'
+          from pathlib import Path
+          base = Path('.action-smoke-fixture')
+          for name in ('clean', 'finding', 'incomplete'):
+              (base / name).mkdir(parents=True)
+          (base / 'clean' / 'safe.txt').write_text('ordinary documentation\n')
+          (base / 'finding' / 'synthetic.txt').write_text('AWS=AKIA1234567890ABCDEF\n')
+          (base / 'incomplete' / 'large.txt').write_bytes(b'x' * 2_000_001)
+          PY
+      # Bind the action implementation to this workflow commit, not mutable checkout files.
+      - name: Scan clean fixture
+        id: clean
+        uses: $/
+        with:
+          path: .action-smoke-fixture/clean
+          artifact-name: action-smoke-clean
+          retention-days: '1'
+      - name: Scan finding fixture and upload before gating
+        id: finding
+        continue-on-error: true
+        uses: $/
+        with:
+          path: .action-smoke-fixture/finding
+          artifact-name: action-smoke-finding
+          retention-days: '1'
+      - name: Scan incomplete fixture and upload before gating
+        id: incomplete
+        continue-on-error: true
+        uses: $/
+        with:
+          path: .action-smoke-fixture/incomplete
+          artifact-name: action-smoke-incomplete
+          retention-days: '1'
+      - name: Verify outcomes, redaction and isolated reports
+        if: always()
+        shell: bash
+        env:
+          CLEAN_OUTCOME: ${{ steps.clean.outcome }}
+          FINDING_OUTCOME: ${{ steps.finding.outcome }}
+          INCOMPLETE_OUTCOME: ${{ steps.incomplete.outcome }}
+          CLEAN_DIR: ${{ steps.clean.outputs.reports-dir }}
+          FINDING_DIR: ${{ steps.finding.outputs.reports-dir }}
+          INCOMPLETE_DIR: ${{ steps.incomplete.outputs.reports-dir }}
+          CLEAN_ARTIFACT: ${{ steps.clean.outputs.artifact-id }}
+          FINDING_ARTIFACT: ${{ steps.finding.outputs.artifact-id }}
+          INCOMPLETE_ARTIFACT: ${{ steps.incomplete.outputs.artifact-id }}
+          CLEAN_COUNT: ${{ steps.clean.outputs.finding-count }}
+          FINDING_COUNT: ${{ steps.finding.outputs.finding-count }}
+          INCOMPLETE_COMPLETE: ${{ steps.incomplete.outputs.complete }}
+          FINDING_EXIT: ${{ steps.finding.outputs.scan-exit-code }}
+          INCOMPLETE_EXIT: ${{ steps.incomplete.outputs.scan-exit-code }}
+        run: |
+          python3 -I - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          assert os.environ['CLEAN_OUTCOME'] == 'success'
+          assert os.environ['FINDING_OUTCOME'] == 'failure'
+          assert os.environ['INCOMPLETE_OUTCOME'] == 'failure'
+          for name in ('CLEAN_ARTIFACT', 'FINDING_ARTIFACT', 'INCOMPLETE_ARTIFACT'):
+              assert os.environ[name].isdigit(), f'{name} was not uploaded'
+          assert os.environ['CLEAN_COUNT'] == '0'
+          assert os.environ['FINDING_COUNT'] == '1'
+          assert os.environ['INCOMPLETE_COMPLETE'] == 'false'
+          assert os.environ['FINDING_EXIT'] == '1'
+          assert os.environ['INCOMPLETE_EXIT'] == '2'
+          directories = [Path(os.environ[name]) for name in ('CLEAN_DIR', 'FINDING_DIR', 'INCOMPLETE_DIR')]
+          assert len(set(directories)) == 3
+          for directory in directories:
+              assert directory.is_relative_to(Path(os.environ['RUNNER_TEMP']))
+              for name in ('secret-sentinel.json', 'secret-sentinel.md'):
+                  text = (directory / name).read_text()
+                  assert 'AKIA1234567890ABCDEF' not in text
+                  assert str(Path(os.environ['GITHUB_WORKSPACE'])) not in text
+              json.loads((directory / 'secret-sentinel.json').read_text())
+          PY

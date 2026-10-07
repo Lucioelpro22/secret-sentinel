@@ -1,0 +1,90 @@
+name: Secret Sentinel
+description: Offline secret and unsafe configuration detection with redacted reports
+author: Lucioelpro22
+branding:
+  icon: shield
+  color: blue
+inputs:
+  path:
+    description: Existing directory relative to the checked-out workspace
+    default: '.'
+  fail-on:
+    description: Minimum severity to fail (low, medium, high, critical)
+    default: high
+  fail-on-findings:
+    description: Fail when a finding meets the severity threshold (true or false)
+    default: 'true'
+  fail-on-incomplete:
+    description: Fail when in-scope input could not be completely scanned (true or false)
+    default: 'true'
+  include-hidden:
+    description: Include hidden files and directories, including workflows (true or false)
+    default: 'true'
+  artifact-name:
+    description: Artifact name (1-64 ASCII letters, digits, dots, underscores or hyphens)
+    default: secret-sentinel-report
+  retention-days:
+    description: Retention duration between 1 and 7 days
+    default: '7'
+outputs:
+  reports-dir:
+    description: Runner temporary directory containing the redacted JSON and Markdown reports
+    value: ${{ steps.scan.outputs.reports-dir }}
+  finding-count:
+    description: Total findings
+    value: ${{ steps.scan.outputs.finding-count }}
+  credential-count:
+    description: Credential findings
+    value: ${{ steps.scan.outputs.credential-count }}
+  configuration-count:
+    description: Configuration findings
+    value: ${{ steps.scan.outputs.configuration-count }}
+  complete:
+    description: Whether all in-scope input was scanned
+    value: ${{ steps.scan.outputs.complete }}
+  scan-exit-code:
+    description: Scan status before policy switches (0 clean, 1 threshold finding, 2 incomplete)
+    value: ${{ steps.scan.outputs.scan-exit-code }}
+  artifact-id:
+    description: Uploaded GitHub artifact identifier
+    value: ${{ steps.upload.outputs.artifact-id }}
+runs:
+  using: composite
+  steps:
+    - name: Set up trusted Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version: '3.12'
+    - name: Scan without executing repository code
+      id: scan
+      shell: bash
+      env:
+        SENTINEL_ACTION_PATH: ${{ github.action_path }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+        INPUT_FAIL_ON_INCOMPLETE: ${{ inputs.fail-on-incomplete }}
+        INPUT_INCLUDE_HIDDEN: ${{ inputs.include-hidden }}
+        INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        INPUT_RETENTION_DAYS: ${{ inputs.retention-days }}
+      run: python -I "$SENTINEL_ACTION_PATH/scripts/action_runner.py" scan
+    - name: Upload only the redacted reports
+      id: upload
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.scan.outputs.artifact-name }}
+        path: |
+          ${{ steps.scan.outputs.reports-dir }}/secret-sentinel.json
+          ${{ steps.scan.outputs.reports-dir }}/secret-sentinel.md
+        retention-days: ${{ steps.scan.outputs.retention-days }}
+        if-no-files-found: error
+        include-hidden-files: false
+    - name: Enforce the scan policy after uploading evidence
+      shell: bash
+      env:
+        SENTINEL_ACTION_PATH: ${{ github.action_path }}
+        SCAN_EXIT_CODE: ${{ steps.scan.outputs.scan-exit-code }}
+        THRESHOLD_EXCEEDED: ${{ steps.scan.outputs.threshold-exceeded }}
+        INPUT_FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+        INPUT_FAIL_ON_INCOMPLETE: ${{ inputs.fail-on-incomplete }}
+      run: python -I "$SENTINEL_ACTION_PATH/scripts/action_runner.py" gate

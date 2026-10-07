@@ -40,7 +40,7 @@ jobs:
         run: python -m ruff format --check .
       - name: Mypy
         if: matrix.python-version == '3.12'
-        run: python -m mypy src
+        run: python -m mypy src scripts/action_runner.py
       - name: Tests with coverage
         run: python -m pytest --cov --cov-report=term-missing --cov-report=xml
       - name: Scan production source with the installed CLI
