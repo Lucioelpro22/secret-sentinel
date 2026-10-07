@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import unicodedata
 
 
 def fingerprint(value: str, *, namespace: str = "secret-sentinel") -> str:
@@ -27,3 +28,22 @@ def redact(value: str) -> str:
     if len(value) <= 8:
         return f"[redacted:{len(value)}]"
     return f"{value[:3]}…{value[-2:]} [redacted:{len(value)}]"
+
+
+def sanitize_metadata(value: str) -> str:
+    """Redact recognized credentials and escape unsafe display characters.
+
+    Paths remain metadata, not a guarantee that arbitrary secrets embedded in
+    names can be identified. Import rules lazily to avoid their model cycle.
+    """
+
+    from .rules import RULES
+
+    for rule in RULES:
+        value = rule.pattern.sub(lambda match: redact(match.group(0)), value)
+    return "".join(
+        f"\\u{ord(char):04x}"
+        if unicodedata.category(char) in {"Cc", "Cf", "Cs"}
+        else char
+        for char in value
+    )

@@ -1,6 +1,6 @@
 # Secret Sentinel
 
-Secret Sentinel is a defensive, local-first scanner for detecting accidentally committed credentials and unsafe configuration in source trees and CI artifacts.
+Secret Sentinel is a defensive, local-first scanner for detecting accidentally committed credentials in source trees and CI artifacts.
 
 It is designed for engineers and security teams that need a repeatable pre-commit or CI control without sending source code to a third party. Findings are normalized, classified, and redacted before they are rendered in reports.
 
@@ -8,13 +8,13 @@ It is designed for engineers and security teams that need a repeatable pre-commi
 
 ## What it does
 
-- Scans files and selected repository metadata with explicit scope boundaries.
-- Detects high-confidence credential patterns and unsafe configuration indicators.
+- Scans selected working-tree files with explicit scope boundaries.
+- Detects common credential patterns and high-entropy quoted assignments.
 - Applies entropy and context checks to reduce noisy matches.
 - Redacts secret material in console, JSON, and Markdown output.
-- Assigns severity, confidence, detector ID, and remediation guidance.
+- Assigns severity, confidence, detector ID, and redacted evidence.
 - Supports deterministic output for CI review and regression tests.
-- Fails closed on unreadable input, malformed policy, or unsafe configuration.
+- Marks unreadable or truncated input incomplete and rejects invalid scan configuration.
 
 ## What it does not do
 
@@ -40,7 +40,7 @@ Install the package and run the CLI against an explicit file or directory:
 
 ```bash
 python -m pip install .
-secret-sentinel scan . --format json --output secret-report.json --fail-on high
+secret-sentinel scan . --include-hidden --format json --output secret-report.json --fail-on high
 ```
 
 Pin the package revision in CI. API integrations must check `report.complete` as well as findings; an incomplete scan cannot establish a clean result.
@@ -86,3 +86,15 @@ Please do not disclose credentials or exploit details in a public issue. Follow 
 ## License
 
 See [LICENSE](LICENSE). The project is intended for authorized defensive use only.
+
+## Scope and platform support
+
+Use `--include-hidden` to scan `.env` and `.github`; hidden files are omitted by default. Add directory-name exclusions with repeatable `--exclude-dir dist` and suffix exclusions with `--exclude-extension .log`. These add to defaults. Set positive `--max-file-bytes` and `--max-total-bytes` to bound reads. An explicitly selected file is scanned even when its name matches a directory-scan exclusion.
+
+Safe reads require POSIX directory descriptors and no-follow support; use WSL on Windows. Unsupported platforms produce incomplete scans (exit 2). A selected target symlink resolves once to the selected canonical target; symlinks inside that target are excluded, and `follow_symlinks=True` is rejected. The root is pinned while files are read, but concurrent edits are not a consistent filesystem snapshot.
+
+`bytes_scanned` counts bytes consumed, including skipped binary input and bounded overflow probes, capped at the total budget; overflow may read one additional sentinel byte. Binary files remain excluded from detector analysis. Reports hide recognized credential patterns and escape control characters in paths; paths can still contain sensitive or unrecognized values.
+
+The example YAML is a future policy design, not an executable configuration. Policy-file loading, suppressions, unsafe-configuration detectors, archive contents, and Git history scanning are not implemented.
+
+Report output uses exclusive creation with owner-only permissions. An existing output file or symlink is rejected (exit 2) to prevent source-file overwrite; choose a new report path on each run. Markdown path metadata is rendered as literal text.

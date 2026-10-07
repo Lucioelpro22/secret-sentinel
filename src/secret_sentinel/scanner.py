@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal
 
+from .file_reader import FileLimitExceeded, open_scan_root, read_scan_file
 from .models import Finding, ScanConfig, ScanReport, Severity
 from .redaction import fingerprint, redact
 from .rules import ASSIGNMENT, BASE64ISH, PLACEHOLDER, RULES
@@ -15,6 +17,8 @@ from .rules import ASSIGNMENT, BASE64ISH, PLACEHOLDER, RULES
 class Scanner:
     def __init__(self, config: ScanConfig | None = None) -> None:
         self.config = config or ScanConfig()
+        if self.config.follow_symlinks:
+            raise ValueError("following symlinks is not supported by safe scans")
 
     def scan(self, target: str | os.PathLike[str]) -> ScanReport:
         root = Path(target)
@@ -25,7 +29,27 @@ class Scanner:
             report.mark_incomplete("target cannot be resolved")
             return report
         report = ScanReport(root=str(root))
-        paths = [root] if root.is_file() else self._iter_files(root, report)
+        is_file = root.is_file()
+        if not is_file and not root.is_dir():
+            report.mark_incomplete("target is not a readable file or directory")
+            return report
+        anchor = root.parent if is_file else root
+        try:
+            with open_scan_root(anchor) as descriptor:
+                paths = iter([root]) if is_file else self._iter_files(root, report)
+                self._scan_files(paths, anchor, descriptor, is_file, report)
+        except OSError:
+            report.mark_incomplete("safe target reads are unavailable; scan skipped")
+        return report
+
+    def _scan_files(
+        self,
+        paths: Iterator[Path],
+        anchor: Path,
+        descriptor: int,
+        is_file: bool,
+        report: ScanReport,
+    ) -> None:
         total = 0
         for path in paths:
             if total >= self.config.max_total_bytes:
@@ -33,45 +57,38 @@ class Scanner:
                     "scan byte limit reached; remaining files skipped"
                 )
                 break
+            limit = min(self.config.max_file_bytes, self.config.max_total_bytes - total)
             try:
-                size = path.stat().st_size
-                if size == 0:
-                    report.files_skipped += 1
-                    continue
-                if size > self.config.max_file_bytes:
-                    report.files_skipped += 1
-                    report.mark_incomplete("file byte limit exceeded; file skipped")
-                    continue
-                if total + size > self.config.max_total_bytes:
-                    report.files_skipped += 1
-                    report.mark_incomplete("scan byte limit exceeded; file skipped")
-                    continue
-                raw = path.read_bytes()
+                raw = read_scan_file(descriptor, path.relative_to(anchor), limit)
+            except FileLimitExceeded as error:
+                total += min(error.consumed, self.config.max_total_bytes - total)
+                report.bytes_scanned = total
+                report.files_skipped += 1
+                report.mark_incomplete("file or scan byte limit exceeded; file skipped")
+                continue
             except (OSError, ValueError):
                 report.files_skipped += 1
                 report.mark_incomplete("file could not be read; file skipped")
                 continue
-            if b"\x00" in raw:
-                report.files_skipped += 1
-                continue
             total += len(raw)
             report.bytes_scanned = total
+            if not raw or b"\x00" in raw:
+                report.files_skipped += 1
+                continue
             report.files_scanned += 1
-            rel = self._display_path(path, root)
+            rel = path.name if is_file else str(path.relative_to(anchor))
             self._scan_text(raw.decode("utf-8", errors="replace"), rel, report)
-        return report
 
-    def _iter_files(self, root: Path, report: ScanReport) -> list[Path]:
+    def _iter_files(self, root: Path, report: ScanReport) -> Iterator[Path]:
         if not root.exists() or not root.is_dir():
             report.mark_incomplete("target is not a readable file or directory")
-            return []
-        result: list[Path] = []
+            return
 
         def on_walk_error(error: OSError) -> None:
             report.mark_incomplete("directory could not be read; subtree skipped")
 
         for current, dirs, files in os.walk(
-            root, followlinks=self.config.follow_symlinks, onerror=on_walk_error
+            root, followlinks=False, onerror=on_walk_error
         ):
             dirs.sort()
             files.sort()
@@ -85,12 +102,14 @@ class Scanner:
                 if not self.config.include_hidden and filename.startswith("."):
                     continue
                 path = Path(current) / filename
-                if path.suffix.lower() in self.config.excluded_extensions:
+                if any(
+                    filename.lower().endswith(extension.lower())
+                    for extension in self.config.excluded_extensions
+                ):
                     continue
-                if not self.config.follow_symlinks and path.is_symlink():
+                if path.is_symlink():
                     continue
-                result.append(path)
-        return result
+                yield path
 
     @staticmethod
     def _display_path(path: Path, root: Path) -> str:
@@ -100,7 +119,7 @@ class Scanner:
             return path.name
 
     def _scan_text(self, text: str, display_path: str, report: ScanReport) -> None:
-        seen: set[tuple[int, str]] = set()
+        seen: set[tuple[int, str, str]] = set()
         for line_number, original in enumerate(text.splitlines(), 1):
             if len(seen) >= self.config.max_findings_per_file:
                 report.mark_incomplete("per-file finding limit reached; text skipped")
@@ -122,8 +141,9 @@ class Scanner:
                         match.group(0),
                         rule.confidence,
                     )
-            assignment = ASSIGNMENT.search(line)
-            if assignment and self._looks_secret(assignment.group(1)):
+            for assignment in ASSIGNMENT.finditer(line):
+                if not self._looks_secret(assignment.group(1)):
+                    continue
                 value = assignment.group(1)
                 self._add(
                     report,
@@ -140,15 +160,7 @@ class Scanner:
 
     @staticmethod
     def _looks_secret(value: str) -> bool:
-        lowered = value.lower()
-        if (
-            PLACEHOLDER.fullmatch(value)
-            or any(
-                marker in lowered
-                for marker in ("example", "sample", "dummy", "changeme", "placeholder")
-            )
-            or len(value) < 16
-        ):
+        if PLACEHOLDER.fullmatch(value) or len(value) < 16:
             return False
         if not BASE64ISH.fullmatch(value):
             return False
@@ -164,7 +176,7 @@ class Scanner:
     def _add(
         self,
         report: ScanReport,
-        seen: set[tuple[int, str]],
+        seen: set[tuple[int, str, str]],
         path: str,
         line: int,
         column: int,
@@ -174,7 +186,7 @@ class Scanner:
         value: str,
         confidence: Literal["high", "medium"],
     ) -> None:
-        key = (line, rule_id)
+        key = (line, rule_id, fingerprint(value))
         if key in seen:
             return
         if len(seen) >= self.config.max_findings_per_file:

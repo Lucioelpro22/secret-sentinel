@@ -16,7 +16,7 @@ Example CLI integration:
 
 ```yaml
 - name: Scan for exposed secrets
-  run: secret-sentinel scan . --format json --output secret-report.json --fail-on high
+  run: secret-sentinel scan . --include-hidden --format json --output secret-report.json --fail-on high
 ```
 
 Do not print the report with `cat` into logs. Review it as an artifact with access controls.
@@ -34,9 +34,9 @@ Exit `2` means the scan was incomplete, even when no finding met the threshold. 
 
 Secret Sentinel does not perform steps 3 or 4 automatically by design.
 
-## Suppressions
+## Planned suppressions
 
-Prefer removing the false positive. If suppression is necessary, scope it to a detector and exact file or line, record the reason and expiry, and require code-owner review. Never suppress a broad pattern merely to make CI green.
+Executable suppressions are not implemented yet. Prefer removing the false positive. If suppression is necessary, scope it to a detector and exact file or line, record the reason and expiry, and require code-owner review. Never suppress a broad pattern merely to make CI green.
 
 ## Limitations
 

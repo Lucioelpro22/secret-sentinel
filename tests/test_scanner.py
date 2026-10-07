@@ -23,13 +23,15 @@ def test_ignores_common_placeholders_and_binary(tmp_path):
     assert report.files_skipped == 1
 
 
-def test_generic_assignment_requires_entropy(tmp_path):
+def test_generic_assignment_requires_entropy_without_substring_suppression(tmp_path):
     (tmp_path / "config.yml").write_text(
         'password: "aaaaaaaaaaaaaaaaaaaa"\nsecret: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"\n',
         encoding="utf-8",
     )
     report = Scanner().scan(tmp_path)
-    assert all(f.rule_id != "generic-secret-assignment" for f in report.findings)
+    generic = [f for f in report.findings if f.rule_id == "generic-secret-assignment"]
+    assert len(generic) == 1
+    assert generic[0].line == 2
 
 
 def test_resource_limits_are_enforced(tmp_path):
