@@ -19,7 +19,7 @@ The collector accepts an explicit root and applies include/exclude rules, file-s
 
 ### Detector registry
 
-Detectors are small, deterministic functions. Each finding carries a detector ID, match location, confidence, severity, description and redacted evidence. Detector implementations receive bounded text and must not emit the matched value.
+Detectors are small, deterministic functions. Each finding carries a detector ID, match location, confidence, severity, description and redacted evidence. Detector implementations receive bounded text and must not emit the matched value. Configuration detectors inspect supported line syntax and Python AST without executing code, returning canonical evidence and category `configuration`; credential detectors remain separate.
 
 ### Normalizer and redactor
 

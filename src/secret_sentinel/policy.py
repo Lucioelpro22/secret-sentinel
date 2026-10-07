@@ -14,6 +14,7 @@ from .file_reader import read_scan_file
 from .models import ScanConfig, ScanReport, Severity, SuppressedFinding
 from .redaction import sanitize_metadata
 from .rules import RULES
+from .unsafe_config import CONFIG_RULE_IDS
 
 
 class PolicyError(ValueError):
@@ -82,6 +83,7 @@ def _suppression(value: object, today: date) -> Suppression:
     if not isinstance(rule, str) or rule not in {
         *(entry.rule_id for entry in RULES),
         "generic-secret-assignment",
+        *CONFIG_RULE_IDS,
     }:
         _reject()
     path = _path(item["path"])

@@ -12,6 +12,7 @@ from .file_reader import FileLimitExceeded, open_scan_root, read_scan_file
 from .models import Finding, ScanConfig, ScanReport, Severity
 from .redaction import fingerprint, redact
 from .rules import ASSIGNMENT, BASE64ISH, PLACEHOLDER, RULES
+from .unsafe_config import iter_config_matches, python_multiline_string_ranges
 
 
 class Scanner:
@@ -120,6 +121,12 @@ class Scanner:
 
     def _scan_text(self, text: str, display_path: str, report: ScanReport) -> None:
         seen: set[tuple[int, str, str]] = set()
+        string_ranges = iter(
+            python_multiline_string_ranges(text)
+            if Path(display_path).suffix.lower() == ".py"
+            else []
+        )
+        string_range = next(string_ranges, None)
         for line_number, original in enumerate(text.splitlines(), 1):
             if len(seen) >= self.config.max_findings_per_file:
                 report.mark_incomplete("per-file finding limit reached; text skipped")
@@ -157,6 +164,25 @@ class Scanner:
                     value,
                     "medium",
                 )
+            while string_range is not None and string_range[1] < line_number:
+                string_range = next(string_ranges, None)
+            if string_range is not None and string_range[0] <= line_number:
+                continue
+            for config_match in iter_config_matches(line, display_path):
+                self._add(
+                    report,
+                    seen,
+                    display_path,
+                    line_number,
+                    config_match.column,
+                    config_match.rule_id,
+                    config_match.description,
+                    config_match.severity,
+                    config_match.identity,
+                    config_match.confidence,
+                    category="configuration",
+                    evidence=config_match.evidence,
+                )
 
     @staticmethod
     def _looks_secret(value: str) -> bool:
@@ -185,6 +211,9 @@ class Scanner:
         severity: Severity,
         value: str,
         confidence: Literal["high", "medium"],
+        *,
+        category: Literal["secret", "configuration"] = "secret",
+        evidence: str | None = None,
     ) -> None:
         key = (line, rule_id, fingerprint(value))
         if key in seen:
@@ -201,8 +230,9 @@ class Scanner:
                 rule_id,
                 description,
                 severity,
-                redact(value),
+                evidence if evidence is not None else redact(value),
                 fingerprint(value),
                 confidence,
+                category,
             )
         )

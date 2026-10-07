@@ -22,7 +22,7 @@ def _markdown_cell(value: str) -> str:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="secret-sentinel", description="Offline, redacted secret detection"
+        prog="secret-sentinel", description="Offline, redacted credential and configuration checks"
     )
     sub = parser.add_subparsers(dest="command", required=True)
     scan = sub.add_parser("scan", help="scan a file or directory without modifying it")
@@ -67,12 +67,12 @@ def _render(report: ScanReport, output_format: str) -> str:
             f"- Suppressed findings: {len(report.suppressed_findings)}",
             f"- Scan complete: {report.complete}",
             "",
-            "| Path | Line | Rule | Severity | Evidence |",
-            "|---|---:|---|---|---|",
+            "| Path | Line | Rule | Category | Severity | Evidence |",
+            "|---|---:|---|---|---|---|",
         ]
         for finding in report.findings:
             lines.append(
-                f"| {_markdown_cell(finding.path)} | {finding.line} | `{finding.rule_id}` | {finding.severity} | `{_markdown_cell(finding.redacted_match)}` |"
+                f"| {_markdown_cell(finding.path)} | {finding.line} | `{finding.rule_id}` | {finding.category} | {finding.severity} | `{_markdown_cell(finding.redacted_match)}` |"
             )
         if report.suppressed_findings:
             lines.extend(
@@ -97,7 +97,7 @@ def _render(report: ScanReport, output_format: str) -> str:
         f"Suppressed findings: {len(report.suppressed_findings)}.",
     ]
     lines.extend(
-        f"{f.path}:{f.line}:{f.column} {f.severity} {f.rule_id} {f.redacted_match}"
+        f"{f.path}:{f.line}:{f.column} {f.severity} {f.category} {f.rule_id} {f.redacted_match}"
         for f in report.findings
     )
     lines.extend(

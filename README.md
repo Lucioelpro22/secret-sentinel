@@ -9,7 +9,7 @@ It is designed for engineers and security teams that need a repeatable pre-commi
 ## What it does
 
 - Scans selected working-tree files with explicit scope boundaries.
-- Detects common credential patterns and high-entropy quoted assignments.
+- Detects common credential patterns, high-entropy quoted assignments and specific unsafe configuration literals.
 - Applies entropy and context checks to reduce noisy matches.
 - Redacts secret material in console, JSON, and Markdown output.
 - Assigns severity, confidence, detector ID, and redacted evidence.
@@ -95,7 +95,7 @@ Safe reads require POSIX directory descriptors and no-follow support; use WSL on
 
 `bytes_scanned` counts bytes consumed, including skipped binary input and bounded overflow probes, capped at the total budget; overflow may read one additional sentinel byte. Binary files remain excluded from detector analysis. Reports hide recognized credential patterns and escape control characters in paths; paths can still contain sensitive or unrecognized values.
 
-Versioned JSON policies and exact expiring suppressions are supported through an explicit `--policy` option; see [docs/policy.md](docs/policy.md). YAML loading, unsafe-configuration detectors, archive contents, and Git history scanning are not implemented.
+Versioned JSON policies and exact expiring suppressions are supported through an explicit `--policy` option; see [docs/policy.md](docs/policy.md). YAML policy loading, archive contents and Git history scanning are not implemented.
 
 Report output uses exclusive creation with owner-only permissions. An existing output file or symlink is rejected (exit 2) to prevent source-file overwrite; choose a new report path on each run. Markdown path metadata is rendered as literal text.
 
@@ -106,3 +106,7 @@ secret-sentinel scan . --policy .secret-sentinel.example.json --format json --ou
 ```
 
 Policies are validated before scanning and are never discovered automatically. Unknown keys, duplicate JSON keys, invalid values and expired suppressions fail with exit 2. Suppressed findings remain visible under `suppressed_findings` and `suppressed_count`; `findings` and `secret_count` represent active findings. Incomplete coverage always retains exit 2.
+
+## Unsafe configuration checks
+
+The scanner also reports specific debug, TLS-verification and Django allowed-hosts patterns with `category: configuration`. See [docs/unsafe-configuration.md](docs/unsafe-configuration.md) for exact syntax, severity and limitations. These are review indicators, not proof of runtime exposure. Active findings expose `finding_count`, `credential_count` and `configuration_count`; the legacy `secret_count` key/property remains a total of active findings for compatibility. Suppressed findings remain visible separately.
