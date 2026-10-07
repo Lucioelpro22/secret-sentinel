@@ -16,10 +16,10 @@ The roadmap is directional; security and correctness take priority over feature 
 - [x] detector corpus with synthetic fixtures;
 - [x] pinned bounded file reads, metadata protection and CLI scope controls;
 - [x] versioned JSON policy files and narrow reviewed, expiring suppressions;
-- [ ] unsafe-configuration detectors;
+- [x] initial unsafe-configuration detectors (specific debug, TLS and Django allowed-hosts literals);
 - archive and generated-file handling with strict resource limits;
 - SARIF output without secret material;
-- documented suppression lifecycle;
+- [x] documented suppression lifecycle;
 - benchmark suite for large repositories;
 - reproducible release artifacts and provenance.
 

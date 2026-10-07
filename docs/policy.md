@@ -16,7 +16,7 @@ At most 100 entries are accepted. Each entry requires:
 
 | Field | Meaning |
 |---|---|
-| `rule_id` | A known detector ID, including `generic-secret-assignment` |
+| `rule_id` | A known detector ID, including `generic-secret-assignment` and the documented `config-*` rules |
 | `path` | Exact slash-separated path relative to a directory target; basename for a selected file |
 | `fingerprint` | Exact 16 lowercase hexadecimal characters from the redacted finding |
 | `reason` | Review justification, 10–500 characters after trimming |
@@ -62,3 +62,5 @@ An invalid policy exits 2 with a fixed safe diagnostic before producing a report
 5. Remove or renew the exception after a fresh review before expiration.
 
 Secret Sentinel does not enforce human approval or validate credentials against their providers. It does not revoke credentials, inspect Git history or rewrite files.
+
+Configuration findings use the same exact suppression contract. Their fingerprints identify canonical recognized settings rather than whole source lines; changing an adjacent URL or comment does not change that setting fingerprint. Review the rule and optional line carefully. `secret_count` is retained as a legacy active-finding total; use `credential_count` and `configuration_count` for categories.

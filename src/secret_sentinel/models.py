@@ -84,6 +84,7 @@ class Finding:
     redacted_match: str
     fingerprint: str
     confidence: Literal["high", "medium"]
+    category: Literal["secret", "configuration"] = "secret"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "path", sanitize_metadata(self.path))
@@ -102,6 +103,7 @@ class Finding:
             "redacted_match": self.redacted_match,
             "fingerprint": self.fingerprint,
             "confidence": self.confidence,
+            "category": self.category,
         }
 
 
@@ -155,6 +157,11 @@ class ScanReport:
             "bytes_scanned": self.bytes_scanned,
             "files_skipped": self.files_skipped,
             "secret_count": len(self.findings),
+            "finding_count": len(self.findings),
+            "credential_count": sum(f.category == "secret" for f in self.findings),
+            "configuration_count": sum(
+                f.category == "configuration" for f in self.findings
+            ),
             "suppressed_count": len(self.suppressed_findings),
             "suppressed_findings": [
                 item.to_dict() for item in self.suppressed_findings
