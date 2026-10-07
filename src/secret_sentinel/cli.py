@@ -22,7 +22,8 @@ def _markdown_cell(value: str) -> str:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="secret-sentinel", description="Offline, redacted credential and configuration checks"
+        prog="secret-sentinel",
+        description="Offline, redacted credential and configuration checks",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     scan = sub.add_parser("scan", help="scan a file or directory without modifying it")
